@@ -2,22 +2,28 @@ import NIOSSL
 import Fluent
 import FluentPostgresDriver
 import Vapor
+import AWSDynamoDB
 
-// configures your application
-public func configure(_ app: Application) async throws {
-    // uncomment to serve files from /Public folder
-    // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
-
-    app.databases.use(DatabaseConfigurationFactory.postgres(configuration: .init(
-        hostname: Environment.get("DATABASE_HOST") ?? "localhost",
-        port: Environment.get("DATABASE_PORT").flatMap(Int.init(_:)) ?? SQLPostgresConfiguration.ianaPortNumber,
-        username: Environment.get("DATABASE_USERNAME") ?? "vapor_username",
-        password: Environment.get("DATABASE_PASSWORD") ?? "vapor_password",
-        database: Environment.get("DATABASE_NAME") ?? "vapor_database",
-        tls: .prefer(try .init(configuration: .clientDefault)))
-    ), as: .psql)
-
-    app.migrations.add(CreateTodo())
-    // register routes
+public func configure(_ app: Application) throws {
+    // AWS DynamoDB 클라이언트 설정
+    let dynamoDB = try DynamoDBClient(region: "ap-northeast-2")
+    app.storage[Key.self] = dynamoDB
+    
+    app.http.server.configuration.port = 8080
+    // 라우트 등록
     try routes(app)
+}
+
+// Storage Key for DynamoDB
+private struct Key: StorageKey {
+    typealias Value = DynamoDBClient
+}
+
+extension Application {
+    var dynamoDB: DynamoDBClient {
+        guard let db = storage[Key.self] else {
+            fatalError("DynamoDB not configured. Use app.dynamoDB to configure.")
+        }
+        return db
+    }
 }
